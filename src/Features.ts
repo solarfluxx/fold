@@ -40,3 +40,21 @@ export function asyncFeature<T>(data: () => Promise<T>) {
 		return { isLoadingAtom };
 	});
 }
+
+export function localStorageFeature(key: string) {
+	return createFeature((external, internal: InternalAtom<string>) => {
+		const value = localStorage.getItem(key);
+		if (value !== null) { internal.set(value); }
+		external.watch(value => localStorage.setItem(key, value));
+		return {};
+	});
+}
+
+export function sessionStorageFeature(key: string) {
+	return createFeature((external, internal: InternalAtom<string>) => {
+		const value = sessionStorage.getItem(key);
+		if (value !== null) { internal.set(value); }
+		external.watch(value => sessionStorage.setItem(key, value));
+		return {};
+	});
+}
