@@ -38,9 +38,9 @@ export function localStorageFeature(key) {
     return createFeature((external, internal) => {
         const value = localStorage.getItem(key);
         if (value !== null) {
-            internal.set(value);
+            internal.set(JSON.parse(value));
         }
-        external.watch(value => localStorage.setItem(key, value));
+        external.watch(value => localStorage.setItem(key, JSON.stringify(value)));
         return {};
     });
 }
@@ -48,9 +48,9 @@ export function sessionStorageFeature(key) {
     return createFeature((external, internal) => {
         const value = sessionStorage.getItem(key);
         if (value !== null) {
-            internal.set(value);
+            internal.set(JSON.parse(value));
         }
-        external.watch(value => sessionStorage.setItem(key, value));
+        external.watch(value => localStorage.setItem(key, JSON.stringify(value)));
         return {};
     });
 }

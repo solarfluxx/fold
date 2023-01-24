@@ -14,5 +14,5 @@ export declare const arrayFeature: import("./Types").Feature<any[], any, import(
 export declare function asyncFeature<T>(data: () => Promise<T>): import("./Types").Feature<T, any, import("./Types").Features, {
     isLoadingAtom: import("./Types").BaseAtom<boolean, boolean, {}>;
 }>;
-export declare function localStorageFeature(key: string): import("./Types").Feature<string, any, import("./Types").Features, {}>;
-export declare function sessionStorageFeature(key: string): import("./Types").Feature<string, any, import("./Types").Features, {}>;
+export declare function localStorageFeature(key: string): import("./Types").Feature<any, any, import("./Types").Features, {}>;
+export declare function sessionStorageFeature(key: string): import("./Types").Feature<any, any, import("./Types").Features, {}>;

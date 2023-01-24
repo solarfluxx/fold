@@ -42,19 +42,19 @@ export function asyncFeature<T>(data: () => Promise<T>) {
 }
 
 export function localStorageFeature(key: string) {
-	return createFeature((external, internal: InternalAtom<string>) => {
+	return createFeature((external, internal) => {
 		const value = localStorage.getItem(key);
-		if (value !== null) { internal.set(value); }
-		external.watch(value => localStorage.setItem(key, value));
+		if (value !== null) { internal.set(JSON.parse(value)); }
+		external.watch(value => localStorage.setItem(key, JSON.stringify(value)));
 		return {};
 	});
 }
 
 export function sessionStorageFeature(key: string) {
-	return createFeature((external, internal: InternalAtom<string>) => {
+	return createFeature((external, internal) => {
 		const value = sessionStorage.getItem(key);
-		if (value !== null) { internal.set(value); }
-		external.watch(value => sessionStorage.setItem(key, value));
+		if (value !== null) { internal.set(JSON.parse(value)); }
+		external.watch(value => localStorage.setItem(key, JSON.stringify(value)));
 		return {};
 	});
 }
