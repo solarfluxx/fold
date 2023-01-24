@@ -54,7 +54,7 @@ export function sessionStorageFeature(key: string) {
 	return createFeature((external, internal) => {
 		const value = sessionStorage.getItem(key);
 		if (value !== null) { internal.set(JSON.parse(value)); }
-		external.watch(value => localStorage.setItem(key, JSON.stringify(value)));
+		external.watch(value => sessionStorage.setItem(key, JSON.stringify(value)));
 		return {};
 	});
 }
