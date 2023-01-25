@@ -3,6 +3,14 @@ export declare const resetFeature: import("./Types").Feature<any, any, import(".
      * Resets the atom to the value it had when this reset feature was applied.
      */
     reset: () => void;
+    /**
+     * Gets the value that this atom will be reset to when `reset()` is called.
+     */
+    getResetValue: () => any;
+    /**
+     * Sets the value that this atom will be reset to when `reset()` is called.
+     */
+    setResetValue: (value: any) => void;
 }>;
 export declare const hashFeature: import("./Types").Feature<any, any, import("./Types").Features, {
     hash: string;

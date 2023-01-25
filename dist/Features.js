@@ -1,12 +1,20 @@
 import { v4 as randomUUID } from 'uuid';
 import { atom, createFeature } from './Main';
 export const resetFeature = createFeature((external, internal) => {
-    const initial = external.get();
+    let resetValue = external.get();
     return {
         /**
          * Resets the atom to the value it had when this reset feature was applied.
          */
-        reset: () => internal.set(initial),
+        reset: () => internal.set(resetValue),
+        /**
+         * Gets the value that this atom will be reset to when `reset()` is called.
+         */
+        getResetValue: () => resetValue,
+        /**
+         * Sets the value that this atom will be reset to when `reset()` is called.
+         */
+        setResetValue: (value) => { resetValue = value; },
     };
 });
 export const hashFeature = createFeature(() => {
