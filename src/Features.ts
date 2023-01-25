@@ -3,12 +3,23 @@ import { atom, createFeature } from './Main';
 import { InternalAtom } from './Types';
 
 export const resetFeature = createFeature((external, internal) => {
-	const initial = external.get();
+	type T = typeof internal extends InternalAtom<infer U> ? U : never;
+	let resetValue = external.get();
 	return {
 		/**
 		 * Resets the atom to the value it had when this reset feature was applied.
 		 */
-		reset: () => internal.set(initial),
+		reset: () => internal.set(resetValue),
+		
+		/**
+		 * Gets the value that this atom will be reset to when `reset()` is called.
+		 */
+		getResetValue: () => resetValue,
+		
+		/**
+		 * Sets the value that this atom will be reset to when `reset()` is called.
+		 */
+		setResetValue: (value: T): void => { resetValue = value },
 	};
 });
 
