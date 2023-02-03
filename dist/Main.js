@@ -41,10 +41,10 @@ export function atom(getter, setter) {
             return;
         }
         if (internal.observers.length > 100) {
-            console.warn(`Excessive (>100) observers on atom: '${id}'`);
+            console.warn(`Excessive (${internal.observers.length}) observers on '${id}'`);
         }
-        if (internal.dependents.size > 10) {
-            console.warn(`Excessive (>10) dependents on atom: '${id}'`);
+        if (internal.dependents.size > 100) {
+            console.warn(`Excessive (${internal.dependents.size}) dependents on '${id}'`);
         }
         for (const observer of internal.observers) {
             observer();
