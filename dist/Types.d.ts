@@ -106,13 +106,13 @@ export interface InternalAtom<T> {
     /**
      * Stores atoms that depend on this atom.
      * When the atom changes, its dependents will be notified.
-     *
-     * > *Add dependent*
-     * > ```
-     * > dependents.set(atom, callback)
-     * > ```
      */
     dependents: Map<InternalAtom<any>, Observer>;
+    /**
+     * Stores atoms that this atom relies on for its value.
+     * When those atoms change, this atom will be notified.
+     */
+    dependencies: Set<InternalAtom<any>>;
     /**
      * When derivations change but no observers were attached at the time, this value becomes true.
      * Inversely, when an observer is attached this becomes false.
@@ -128,9 +128,17 @@ export interface InternalAtom<T> {
      */
     readonly set: (value: T) => void;
     /**
+     * Handles `isHot` case then returns `value`.
+     */
+    readonly get: (isHot?: boolean) => T;
+    /**
      * Sends an update notification to every observer and dependent.
      */
     readonly notify: () => void;
+    /**
+     * Adds an atom that this atom relies on.
+     */
+    readonly addDependency: (dependency: InternalAtom<any>, observer: Observer) => void;
 }
 export type AtomValue<T> = T extends Atom<infer V> ? V : T;
 export type ExcludeAtom<T> = (T extends Atom<infer V> ? V : T extends Atom<infer V>[] ? V[] : {
