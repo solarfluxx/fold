@@ -1,6 +1,5 @@
 import { v4 as randomUUID } from 'uuid';
-import { atom, createFeature } from './Main';
-import { InternalAtom } from './Types';
+import { atom, createFeature, InternalAtom } from './Main';
 
 export const resetFeature = createFeature((external, internal) => {
 	type T = typeof internal extends InternalAtom<infer U> ? U : never;

@@ -1,4 +1,4 @@
-import { Atom } from './Types';
+import { Atom } from './Main';
 export declare function focusAtom<T extends {
     [key: string]: any;
-}, U extends keyof T>(opticAtom: Atom<T>, property: U): import("./Types").BaseAtom<T[U], T[U], {}>;
+}, U extends keyof T>(opticAtom: Atom<T>, property: U): Atom<T[U], T[U]>;

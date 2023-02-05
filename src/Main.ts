@@ -1,176 +1,241 @@
-import { DependencyList, useCallback, useDebugValue, useEffect, useMemo, useState } from 'react';
+import { DependencyList, useDebugValue, useEffect, useMemo, useState } from 'react';
 import { atomSymbol } from './Const';
-import { Atom, Feature, Features, Getter, InternalAtom, Observer, Primitive, Setter, WithFeatures } from './Types';
+import { AnyValue as AnyType, Feature, FeatureMixin, Getter, Observer, Primitive, Setter } from './Types';
 
 let counter = 0;
 let context: null | { bind: (atom: InternalAtom<any>) => void } = null;
 
-function isGetter<T>(getter: T | Getter<T>): getter is Getter<T> {
+function isGetter<T>(getter: Primitive<T> | Getter<T>): getter is Getter<T> {
 	return typeof getter === 'function';
 }
 
-function useGetter<T>(self: InternalAtom<any>, getter: Getter<T>) {
-	const previousContext = context;
-	context = {
-		bind: (dependency) => {
-			if (!dependency.dependents.has(self)) {
-				self.addDependency(dependency, () => {
-					if (self.isUseless()) {
-						self.isHot = true;
-						return;
-					}
-					
-					self.set(useGetter(self, getter));
-				});
+export class InternalAtom<T> {
+	/** Stores the atoms that this atom relies on. */
+	private __dependencies = new Set<InternalAtom<any>>();
+	/** Backup of dependencies. */
+	private __dependenciesBackup = new Map<InternalAtom<any>, Observer>();
+	/** Stores the atoms that rely on this atom. */
+	private __dependents = new Map<InternalAtom<any>, Observer>();
+	/** Stores the observers of this value. */
+	private __observers: Observer[] = [];
+	
+	/** Unique atom identifier. This can be used for the `key` prop on components. */
+	public readonly id = `atom${counter++}`;
+	
+	/**
+	 * This is the true value of this atom.
+	 * 
+	 * **Important** — Setting this value will not trigger updates on observers! Use `set()` instead.
+	 * 
+	 * **Warning** — Be very careful when reading this value since it may not have been set yet. Use `get()` for safety.
+	 */
+	public value!: T;
+	
+	/** True when dependencies change but there are no observers to update; a get compute would be unnecessary. */
+	public isHot = true;
+	
+	public dependencies = {
+		list: () => {
+			return { observers: this.__observers, dependents: this.__dependents, dependencies: this.__dependencies } as const;
+		},
+		add: (dependency: InternalAtom<any>, observer: Observer) => {
+			this.__dependencies.add(dependency);
+			dependency.__dependents.set(this, observer);
+		},
+		remove: (dependency: InternalAtom<any>) => {
+			this.__dependencies.delete(dependency);
+			dependency.__dependents.delete(this);
+		},
+		/** Clear all dependencies. */
+		revoke: () => {
+			for (const dependency of this.__dependencies) {
+				this.__dependenciesBackup.set(dependency, dependency.__dependents.get(this) as Observer);
+				dependency.__dependents.delete(this);
 			}
-		}
+			
+			console.log('REVOKE', this.id, this.__dependenciesBackup.size, this.__dependencies.size);
+			
+			this.__dependencies = new Set();
+		},
+		/** Restore dependencies cleared by `revoke()`. */
+		restore: () => {
+			for (const [ dependency, observer ] of this.__dependenciesBackup) {
+				this.dependencies.add(dependency, observer);
+			}
+			
+			console.log('RESTORE', this.id, this.__dependenciesBackup.size, this.__dependencies.size);
+			
+			this.__dependenciesBackup = new Map();
+		},
 	};
-	const value = getter();
-	context = previousContext;
-	return value;
-}
-
-export function atom<T>(initial: Exclude<T, Function>): Atom<T, T, {}>;
-export function atom<T, U = T>(initial: Exclude<T, Function>, setter: Setter<T, U>): Atom<T, U, {}>;
-export function atom<T>(getter: Getter<T>): Atom<T, T, {}>;
-export function atom<T, U = T>(getter: Getter<T>, setter: Setter<T, U>): Atom<T, U, {}>;
-export function atom<T, U = T>(getter: T | Getter<T>, setter?: Setter<T, U>): Atom<T, U, {}> {
-	function isUseless() {
-		return internal.observers.length === 0 && internal.dependents.size === 0;
+	
+	constructor(public __external: Atom<T, any>) {}
+	
+	private useGetter(getter: Getter<T>) {
+		const previousContext = context;
+		context = {
+			bind: (dependency) => {
+				if (!dependency.__dependents.has(this)) {
+					this.dependencies.add(dependency, () => {
+						if (this.isFree()) { return this.isHot = true; }
+						this.set(this.useGetter(getter));
+					});
+				}
+			}
+		};
+		const value = getter();
+		context = previousContext;
+		return value;
 	}
 	
-	function set(value: T) {
-		// if (internal.value === value) { return; }
-		internal.value = value;
-		notify();
+	isFree = () => {
+		return this.__observers.length === 0 && this.__dependents.size === 0;
 	}
 	
-	function get(isHot: boolean = false) {
-		if (internal.isHot || isHot) {
-			internal.set(isGetter(getter) ? useGetter(internal, getter) : getter);
-			internal.isHot = false;
+	get = () => {
+		if (this.isHot) {
+			const { getter } = this.__external;
+			this.value = isGetter(getter) ? this.useGetter(getter) : getter;
+			this.isHot = false;
 		}
 		
-		return internal.value;
+		return this.value;
 	}
 	
-	function notify() {
-		if (isUseless()) { return; }
-		if (internal.observers.length > 100) { console.warn(`Excessive (${internal.observers.length}) observers on '${id}'`); }
-		if (internal.dependents.size > 100) { console.warn(`Excessive (${internal.dependents.size}) dependents on '${id}'`); }
-		for (const observer of internal.observers) { observer(); }
-		for (const [, observer] of internal.dependents) { observer(); }
+	/**
+	 * Sets `value` then calls `notify()` to notify observers of the new value.
+	 */
+	set = (value: T) => {
+		this.value = value;
+		this.notify();
 	}
 	
-	function addDependency(dependency: InternalAtom<any>, observer: Observer) {
-		internal.dependencies.add(dependency);
-		dependency.dependents.set(internal, observer);
+	/**
+	 * Sends an update notification to every observer associated with this atom.
+	 */
+	notify = () => {
+		if (this.__observers.length > 100) { console.warn(`Excessive (${this.__observers.length}) observers on '${this.id}'`) }
+		if (this.__dependents.size > 100) { console.warn(`Excessive (${this.__dependents.size}) observers on '${this.id}'`) }
+		console.log('INTERNAL NOTIFY', this);
+		for (const observer of this.__observers) { observer() }
+		for (const [, observer] of this.__dependents) { observer() }
 	}
 	
-	const id = `atom${counter++}`;
-	const features: Feature<T, U, any, any>[] = [];
-	const internal: InternalAtom<T> = {
-		value: null as any,
-		features: features,
-		observers: [],
-		dependents: new Map(),
-		dependencies: new Set(),
-		isHot: true,
-		isUseless,
-		set,
-		get,
-		notify,
-		addDependency
-	};
+	/** Adds an observer that will be called when the value changes. */
+	watch = (observer: Observer) => {
+		this.__observers.push(observer);
+		return () => {
+			const index = this.__observers.indexOf(observer);
+			if (index < 0) { return; }
+			this.__observers.splice(index, 1);
+		};
+	}
+}
+
+export class Atom<T, U = T> {
+	static getInternal(atom: Atom<any>) {
+		return atom.__internal;
+	}
 	
-	const external: Atom<T, U> = {
-		toString: () => id,
-		[atomSymbol]: internal,
-		use: () => {
-			const value = get();
-			
-			if (context) {
-				context.bind(internal);
-				return value;
-			}
-			
-			const [ _value, setValue ] = useState(0);
-			useDebugValue(value);
-			useEffect(() => {
-				const observer = () => setValue(_value + 1);
-				internal.observers.push(observer);
-				return () => { internal.observers = internal.observers.filter(peer => peer !== observer); };
-			});
-			
+	private __internal: InternalAtom<T> = new InternalAtom(this);
+	
+	public [atomSymbol] = true;
+	
+	constructor(initial: Primitive<T>);
+	constructor(initial: Primitive<T>, setter: Setter<T, U>);
+	constructor(getter: Getter<T>);
+	constructor(getter: Getter<T>, setter: Setter<T, U>);
+	constructor(public getter: Primitive<T> | Getter<T>, public setter?: Setter<T, U>) {}
+	
+	toString() {
+		return this.__internal.id;
+	}
+	
+	use() {
+		const { get, watch } = this.__internal;
+		const value = get();
+		
+		if (context) {
+			// Use as dependency
+			context.bind(this.__internal);
 			return value;
-		},
-		get: () => get(false),
-		set: (value) => {
-			const incoming = (typeof value === 'function') ? (value as ((value: T) => U))(internal.get()) : value;
-			const update = setter ? setter(incoming, internal.get()) : (incoming as unknown as T);
-			if (typeof update !== 'undefined') internal.set(update);
-			return external;
-		},
-		do: (action) => {
-			action(internal.get());
-			notify();
-			return external;
-		},
-		watch: (action) => {
-			const observer = () => action(internal.get());
-			internal.observers.push(observer);
-			return () => { internal.observers = internal.observers.filter(peer => peer !== observer); }
-		},
-		with: (feature) => {
-			features.push(feature);
-			Object.assign(external, feature(external, internal));
-			return external as any;
-		},
+		}
+		
+		// Use as react hook
+		const [, setCount] = useState(0);
+		useDebugValue(value);
+		useEffect(() => watch(() => setCount(count => count + 1)), []);
+		return value;
 	}
 	
-	return external;
+	get() {
+		return this.__internal.get();
+	}
+	
+	set(value: Primitive<U> | ((current: T) => U)) {
+		const { get, set } = this.__internal;
+		const current = get();
+		const incoming = typeof value === 'function' ? (value as (value: T) => U)(current) : value;
+		const update = this.setter ? this.setter(incoming, current) : (incoming as unknown as T);
+		if (typeof update !== 'undefined') { set(update); }
+		return this;
+	}
+	
+	do(action?: (current: T) => void) {
+		const { get, notify } = this.__internal;
+		action?.(get());
+		notify();
+		console.log('EXTERNAL DO', this.__internal.isHot);
+		return this;
+	}
+	
+	watch(observer: (current: T) => void) {
+		const { get, watch } = this.__internal;
+		return watch(() => observer(get()));
+	}
+	
+	with<F extends FeatureMixin>(feature: Feature<T, U, F>) {
+		Object.assign(this, feature(this, this.__internal));
+		return this as this & F;
+	}
+}
+
+export function atom<T>(initial: Primitive<T>): Atom<T>;
+export function atom<T, U = T>(initial: Primitive<T>, setter: Setter<T, U>): Atom<T, U>;
+export function atom<T>(getter: Getter<T>): Atom<T>;
+export function atom<T, U = T>(getter: Getter<T>, setter: Setter<T, U>): Atom<T, U>;
+export function atom<T, U = T>(getter: Primitive<T> | Getter<T>, setter?: Setter<T, U>): Atom<T, U> {
+	return new Atom(getter as Getter<T>, setter as Setter<T, U>);
 }
 
 export function inspectAtom(atom: Atom<any>) {
-	return [ atom, atom[atomSymbol] ] as const;
+	return [ atom, Atom.getInternal(atom) ] as const;
 }
 
-export function isAtom<T, U, F extends Features>(atom: Atom<T, U, F> | Primitive | object): atom is Atom<T, U, F> {
+export function isAtom<T, U>(atom: Atom<T, U> | AnyType): atom is Atom<T, U> {
 	try { return atomSymbol in (atom as any); }
 	catch { return false; }
 }
 
-export function createFeature<FF extends Features, T = any, U = any, F extends Features = Features>(feature: Feature<T, U, F, FF>) {
+export function createFeature<F extends FeatureMixin, T = any, U = any>(feature: Feature<T, U, F>) {
 	return feature;
-}
-
-export function hasFeature<F extends Feature<any, any, Features, Features>>(atom: Atom<any>, feature: F): atom is WithFeatures<typeof atom, [ F ]> {
-	return atom[atomSymbol].features.includes(feature);
 }
 
 export function useMemoAtom<T extends Atom<any>>(factory: () => T, dependencies: DependencyList = []) {
 	// Memoize atom
 	const external = useMemo(factory, dependencies);
-	const internal = external[atomSymbol];
+	const internal = Atom.getInternal(external);
 	
 	// Attach dependents
 	internal.get();
-	
-	// Detach dependents for strict mode's weird second render logic
-	for (const dependency of internal.dependencies) {
-		dependency.dependents.delete(internal);
-	}
+	// Detach dependents to fix weird strict mode logic
+	internal.dependencies.revoke();
 	
 	useEffect(() => {
 		// Reattach dependents
-		internal.get(true);
-		
-		return () => {
-			// Cleanup dependencies when component is unloaded
-			for (const dependency of internal.dependencies) {
-				dependency.dependents.delete(internal);
-			}
-		};
+		internal.dependencies.restore();
+		// Detach dependencies when component is unmounted
+		return internal.dependencies.revoke;
 	});
 	
 	return external;

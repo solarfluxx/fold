@@ -1,3 +1,2 @@
-import { atomSymbol } from './Const';
-;
+export {};
 //# sourceMappingURL=Types.js.map
