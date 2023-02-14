@@ -5,6 +5,7 @@ export function focusAtom<T extends { [key: string]: any }, U extends keyof T>(o
 		() => opticAtom.get()[property],
 		(incoming) => { opticAtom.do((value) => (value[property] = incoming)) }
 	).with(createFeature((_external, internal) => {
+		internal.watch(() => opticAtom.do((value) => (value[property] = internal.value)));
 		internal.dependencies.add(Atom.getInternal(opticAtom), () => {
 			const value = opticAtom.get()[property];
 			if (value !== internal.value) { internal.set(value); }

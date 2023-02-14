@@ -9,7 +9,7 @@ export declare class InternalAtom<T> {
     private __dependenciesBackup;
     /** Stores the atoms that rely on this atom. */
     private __dependents;
-    /** Stores the observers of this value. */
+    /** Stores the listeners attached to this value. */
     private __observers;
     /** Unique atom identifier. This can be used for the `key` prop on components. */
     readonly id: string;

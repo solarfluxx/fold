@@ -16,7 +16,7 @@ export class InternalAtom<T> {
 	private __dependenciesBackup = new Map<InternalAtom<any>, Observer>();
 	/** Stores the atoms that rely on this atom. */
 	private __dependents = new Map<InternalAtom<any>, Observer>();
-	/** Stores the observers of this value. */
+	/** Stores the listeners attached to this value. */
 	private __observers: Observer[] = [];
 	
 	/** Unique atom identifier. This can be used for the `key` prop on components. */
@@ -53,8 +53,6 @@ export class InternalAtom<T> {
 				dependency.__dependents.delete(this);
 			}
 			
-			console.log('REVOKE', this.id, this.__dependenciesBackup.size, this.__dependencies.size);
-			
 			this.__dependencies = new Set();
 		},
 		/** Restore dependencies cleared by `revoke()`. */
@@ -62,8 +60,6 @@ export class InternalAtom<T> {
 			for (const [ dependency, observer ] of this.__dependenciesBackup) {
 				this.dependencies.add(dependency, observer);
 			}
-			
-			console.log('RESTORE', this.id, this.__dependenciesBackup.size, this.__dependencies.size);
 			
 			this.__dependenciesBackup = new Map();
 		},
@@ -116,7 +112,6 @@ export class InternalAtom<T> {
 	notify = () => {
 		if (this.__observers.length > 100) { console.warn(`Excessive (${this.__observers.length}) observers on '${this.id}'`) }
 		if (this.__dependents.size > 100) { console.warn(`Excessive (${this.__dependents.size}) observers on '${this.id}'`) }
-		console.log('INTERNAL NOTIFY', this);
 		for (const observer of this.__observers) { observer() }
 		for (const [, observer] of this.__dependents) { observer() }
 	}
@@ -185,7 +180,6 @@ export class Atom<T, U = T> {
 		const { get, notify } = this.__internal;
 		action?.(get());
 		notify();
-		console.log('EXTERNAL DO', this.__internal.isHot);
 		return this;
 	}
 	
