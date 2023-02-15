@@ -8,7 +8,7 @@ export type Setter<T, U> = (incoming: U, current: T) => T | void;
 export type Feature<T, U = T, F extends FeatureMixin = FeatureMixin> = (external: Atom<T, U>, internal: InternalAtom<T>) => F;
 export type FeatureMixin = { [K in string]: any };
 
-export type Primitive<T> = Exclude<T, Function>;
+export type Primitive<T> = Exclude<T, undefined | Function>;
 export type Observer = () => void;
 
 export type AtomValue<T> = T extends Atom<infer V> ? V : T;

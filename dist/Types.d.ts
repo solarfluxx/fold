@@ -6,7 +6,7 @@ export type Feature<T, U = T, F extends FeatureMixin = FeatureMixin> = (external
 export type FeatureMixin = {
     [K in string]: any;
 };
-export type Primitive<T> = Exclude<T, Function>;
+export type Primitive<T> = Exclude<T, undefined | Function>;
 export type Observer = () => void;
 export type AtomValue<T> = T extends Atom<infer V> ? V : T;
 export type ExcludeAtom<T> = (T extends Atom<infer V> ? V : T extends Atom<infer V>[] ? V[] : {

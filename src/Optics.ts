@@ -1,7 +1,7 @@
-import { Atom, atom, createFeature } from './Main';
+import { Atom, createFeature, createOptic } from './Main';
 
-export function focusAtom<T extends { [key: string]: any }, U extends keyof T>(opticAtom: Atom<T>, property: U) {
-	return atom(
+export const [ focusAtom, useFocusAtom ] = createOptic(generator => <T extends { [key: string]: any }, U extends keyof T>(opticAtom: Atom<T>, property: U) => {
+	return generator(
 		() => opticAtom.get()[property],
 		(incoming) => { opticAtom.do((value) => (value[property] = incoming)) }
 	).with(createFeature((_external, internal) => {
@@ -13,4 +13,4 @@ export function focusAtom<T extends { [key: string]: any }, U extends keyof T>(o
 		
 		return {};
 	}));
-}
+});
