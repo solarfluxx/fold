@@ -1,9 +1,13 @@
 # fold
-Fold is a React state library.
+Fold is a React state management library.
 
 ## Install
 ```
-yarn add https://github.com/solarfluxx/fold
+// npm
+npm install @solarfluxx/fold
+
+// yarn
+yarn add @solarfluxx/fold
 ```
 
 ## Examples
