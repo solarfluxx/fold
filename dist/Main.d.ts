@@ -10,7 +10,7 @@ export declare class InternalAtom<T> {
     private __incomingDependencies;
     /** Stores the atoms that rely on this atom. */
     private __dependents;
-    /**  */
+    /** Determines whether new dependencies will be sent to limbo. */
     private __dependenciesFrozen;
     /**
      * This is the true value of this atom. This value is a cache which makes read/write unstable (See below).

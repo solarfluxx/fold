@@ -15,12 +15,11 @@ export class InternalAtom {
     __observers = [];
     /** Stores the atoms that this atom relies on. */
     __dependencies = new Set();
-    /*  */
+    /* Holds dependencies in limbo. */
     __incomingDependencies = new Map();
     /** Stores the atoms that rely on this atom. */
     __dependents = new Map();
-    // TODO
-    /**  */
+    /** Determines whether new dependencies will be sent to limbo. */
     __dependenciesFrozen = false;
     /**
      * This is the true value of this atom. This value is a cache which makes read/write unstable (See below).
@@ -103,10 +102,12 @@ export class InternalAtom {
      */
     notify = () => {
         if (this.__observers.length > 100) {
-            console.warn(`Excessive (${this.__observers.length}) observers on '${this.__external.id}'`);
+            console.warn(`Warning: C1001; Excessive (${this.__observers.length}) observers on '${this.__external.id}' = '${this.value}'`);
+            console.dir(this.__observers);
         }
         if (this.__dependents.size > 100) {
-            console.warn(`Excessive (${this.__dependents.size}) observers on '${this.__external.id}'`);
+            console.warn(`Warning: C1002; Excessive (${this.__dependents.size}) dependents on '${this.__external.id}' = '${this.value}'`);
+            console.dir(this.__dependents);
         }
         for (const observer of this.__observers) {
             observer();
@@ -132,6 +133,7 @@ export class InternalAtom {
      * **Warning** — This is a permanent action. This should only be called after this atom is done being used.
      */
     destroy = () => {
+        this.__observers = [];
         this.dependencies.unlink();
     };
     useGetter = () => {

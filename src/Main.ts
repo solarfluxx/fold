@@ -19,12 +19,11 @@ export class InternalAtom<T> {
 	private __observers: Observer[] = [];
 	/** Stores the atoms that this atom relies on. */
 	private __dependencies = new Set<InternalAtom<any>>();
-	/*  */
+	/* Holds dependencies in limbo. */
 	private __incomingDependencies = new Map<InternalAtom<any>, Observer>();
 	/** Stores the atoms that rely on this atom. */
 	private __dependents = new Map<InternalAtom<any>, Observer>();
-	// TODO
-	/**  */
+	/** Determines whether new dependencies will be sent to limbo. */
 	private __dependenciesFrozen = false;
 	
 	/**
@@ -114,8 +113,16 @@ export class InternalAtom<T> {
 	 * Sends an update notification to every observer associated with this atom.
 	 */
 	notify = () => {
-		if (this.__observers.length > 100) { console.warn(`Excessive (${this.__observers.length}) observers on '${this.__external.id}'`) }
-		if (this.__dependents.size > 100) { console.warn(`Excessive (${this.__dependents.size}) observers on '${this.__external.id}'`) }
+		if (this.__observers.length > 100) {
+			console.warn(`Warning: C1001; Excessive (${this.__observers.length}) observers on '${this.__external.id}' = '${this.value}'`);
+			console.dir(this.__observers);
+		}
+		
+		if (this.__dependents.size > 100) {
+			console.warn(`Warning: C1002; Excessive (${this.__dependents.size}) dependents on '${this.__external.id}' = '${this.value}'`);
+			console.dir(this.__dependents);
+		}
+		
 		for (const observer of this.__observers) { observer() }
 		for (const [, observer] of this.__dependents) { observer() }
 	}
@@ -136,6 +143,7 @@ export class InternalAtom<T> {
 	 * **Warning** — This is a permanent action. This should only be called after this atom is done being used.
 	 */
 	destroy = () => {
+		this.__observers = [];
 		this.dependencies.unlink();
 	}
 	

@@ -4,11 +4,15 @@ export const [ focusAtom, useFocusAtom ] = createOptic(generator => <T extends {
 	return generator(
 		() => opticAtom.get()[property],
 		(incoming) => { opticAtom.do((value) => (value[property] = incoming)) }
-	).with(createFeature((_external, internal) => {
-		internal.watch(() => opticAtom.do((value) => (value[property] = internal.value)));
+	).with(createFeature((external, internal) => {
+		external.watch(incoming => {
+			const opticValue = opticAtom.get()[property];
+			if (opticValue !== incoming) { opticAtom.do((optic) => (optic[property] = incoming)) }
+		});
+		
 		internal.dependencies.add(Atom.getInternal(opticAtom), () => {
-			const value = opticAtom.get()[property];
-			if (value !== internal.value) { internal.set(value); }
+			const opticValue = opticAtom.get()[property];
+			if (opticValue !== internal.value) { internal.set(opticValue); }
 		});
 		
 		return {};
