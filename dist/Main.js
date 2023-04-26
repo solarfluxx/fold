@@ -70,9 +70,22 @@ export class InternalAtom {
         this.getter = getter;
         this.setter = setter;
     }
+    /**
+     * Returns the freedom status of this atom.
+     *
+     * An atom is "free" if it doesn't have any observers or dependents relying on it.
+     */
     isFree = () => {
         return this.__observers.length === 0 && this.__dependents.size === 0;
     };
+    /**
+     * Safely returns the current value. This will reevaulate the value if its not assigned or is outdated.
+     *
+     * Atom values are lazily loaded (only evaluated when needed) so reading
+     * `this.value` directly is dangerous.
+     *
+     * **Note** — This is wrapped by `Atom.get` (external).
+     */
     get = () => {
         if (this.isHot) {
             this.value = this.useGetter();
@@ -81,14 +94,19 @@ export class InternalAtom {
         return this.value;
     };
     /**
-     * Sets `value` then calls `notify()` to notify observers of the new value.
+     * Sets `this.value` directly, then calls `this.notify()` to notify observers of the new value.
+     *
+     * This does not accept a setter so `this.set(v => v)` will assign `this.value` to `v => v` literally.
+     * Use `Atom.set` (external) for that function.
      */
     set = (value) => {
         this.value = value;
         this.notify();
     };
     /**
-     * Sets `value` using the getter/initial value.
+     * Evaulates the getter and assigns `this.value` to the returned value.
+     *
+     * **Note** — Do not call this unnecessarily since the evaluation of the getter may be expessive.
      */
     refresh = () => {
         if (this.isFree()) {
@@ -98,7 +116,9 @@ export class InternalAtom {
         this.set(this.useGetter());
     };
     /**
-     * Sends an update notification to every observer associated with this atom.
+     * Calls every observer and notifies every dependent associated with this atom.
+     *
+     * **Note** — Do not call this unnecessarily since the execution of the observers/dependents may be expessive.
      */
     notify = () => {
         if (this.__observers.length > 100) {
@@ -116,7 +136,11 @@ export class InternalAtom {
             observer();
         }
     };
-    /** Adds an observer that will be called when the value changes. */
+    /**
+     * Adds an observer that will be called when the value changes.
+     *
+     * Unlike `Atom.watch` (external), this does not evaluate and pass the atom's current value into the observer.
+     */
     watch = (observer) => {
         this.__observers.push(observer);
         return () => {
@@ -128,14 +152,20 @@ export class InternalAtom {
         };
     };
     /**
-     * Destroys this atom.
+     * Releases all observers, dependencies, and dependents.
      *
-     * **Warning** — This is a permanent action. This should only be called after this atom is done being used.
+     * **Warning** — These observers cannot be recovered; they must be rebound manually.
      */
-    destroy = () => {
+    release = () => {
         this.__observers = [];
         this.dependencies.unlink();
     };
+    /**
+     * Evaulates the getter (`this.getter`) and returns its value.
+     *
+     * This operation can be costly so its important to do it as little as possible.
+     * Internally, the return value of this is cached in `this.value`.
+     */
     useGetter = () => {
         const { getter } = this;
         // If there is no getter, use initial value.
@@ -162,6 +192,11 @@ export class InternalAtom {
         // Return value from getter.
         return value;
     };
+    /**
+     * Evaulates a setter and returns its value.
+     *
+     * **Side Effect** — Atom value is evaluated.
+     */
     useSetter = (predicate) => {
         // Safely get the current atom value.
         const current = this.get();
@@ -180,10 +215,28 @@ export class Atom {
     constructor(getter, setter) {
         this.__internal = new InternalAtom(this, getter, setter);
     }
+    /**
+     * Returns the unique identifier of this atom.
+     *
+     * ```
+     * `${atom}`
+     * ```
+     */
     toString() {
         // Return unique id.
         return this.id;
     }
+    /**
+     * Hooks into the value of this atom.
+     *
+     * **React Components**
+     * When called inside of a React component,
+     * it will hook into the component and rerender it when the atom changes.
+     *
+     * **Derived Atoms**
+     * When called inside of an atom's getter,
+     * it will hook into that atom and update it when this atom changes.
+     */
     use() {
         const { get, watch } = this.__internal;
         // Safely get the current atom value.
@@ -206,6 +259,10 @@ export class Atom {
         // Return current value.
         return value;
     }
+    /**
+     * Returns the current value of the atom.
+     * This will **not** hook into React components nor derived atoms.
+     */
     get() {
         if (context && context.provider === this.__internal) {
             throw new Error("Cannot read the value of this atom inside of it's own getter.");
@@ -213,6 +270,24 @@ export class Atom {
         // Safely return the current value.
         return this.__internal.get();
     }
+    /**
+     * Passes a value into this atom's setter.
+     * The setter determines what happens with the value.
+     * The default setter will assign the atom to the passed value.
+     *
+     * **Counter Example**
+     * ```
+     * const countAtom = atom(0);
+     * console.log(countAtom.get()); // 0
+     *
+     * countAtom.set(10);
+     * console.log(countAtom.get()); // 10
+     *
+     * countAtom.set(count => count + 5);
+     * console.log(countAtom.get()); // 15
+     *
+     * ```
+     */
     set(value) {
         const { set, useSetter } = this.__internal;
         // Refine value.
@@ -223,6 +298,20 @@ export class Atom {
         }
         return this;
     }
+    /**
+     * Calls the provided action then notifies observers of the mutation.
+     * This provides a simple way to mutate properties without reassigning the atom.
+     *
+     * **Array Push Example**
+     * ```
+     * const arrayAtom = atom([ 1, 2, 3 ]);
+     * console.log(arrayAtom.get()); // [ 1, 2, 3 ]
+     *
+     * // `push` mutates the array. By calling `push` inside of `do`, the atom is aware of the mutation.
+     * arrayAtom.do(value => value.push(7));
+     * console.log(arrayAtom.get()); // [ 1, 2, 3, 7 ]
+     * ```
+     */
     do(action) {
         const { get, notify } = this.__internal;
         // Call the action.
@@ -231,17 +320,54 @@ export class Atom {
         notify();
         return this;
     }
+    /**
+     * Attaches an observer that is called when the atom updates. Its basically an event listener.
+     *
+     * **Example**
+     * ```
+     * const nameAtom = atom('John');
+     *
+     * // Will log the value of `nameAtom` when its updated.
+     * nameAtom.watch(value => {
+     * 	console.log(value);
+     * });
+     * ```
+     */
     watch(observer) {
         const { get, watch } = this.__internal;
         // Call observer when value updates.
         return watch(() => observer(get()));
     }
+    /**
+     * Attaches a feature to this atom.
+     *
+     * **Warning** — This mutates the atom object; it does not return a new atom.
+     */
     with(feature) {
         // Merge feature properties into this.
         Object.assign(this, feature(this, this.__internal));
-        // Return this; which has been mutated.
+        // Return `this`, which has been mutated.
         return this;
     }
+    /**
+     * Alias of `this.with` but asserts the feature's existance instead of returning it.
+     *
+     * **Example**
+     * ```
+     * const myAtom = atom(0);
+     * myAtom.assertWith(resetFeature);
+     * myAtom.reset(); // `reset()` from `resetFeature` exists
+     * ```
+     */
+    assertWith(feature) {
+        // Merge feature properties into this.
+        Object.assign(this, feature(this, this.__internal));
+    }
+    /**
+     * Returns very basic details of this atom. Honestly, not very useful at the moment.
+     *
+     * @param handler If this is set to `'console'`, it will log to the console too.
+     */
     debug(handler = 'console') {
         const value = {
             id: this.id,
@@ -275,7 +401,7 @@ export function useAtom(getter, setter) {
         // Bind dependencies that were frozen.
         internal.dependencies.unfreeze();
         // Destroy atom.
-        return internal.destroy;
+        return internal.release;
     });
     return external;
 }
@@ -288,7 +414,20 @@ export function isAtom(atom) {
 export function createFeature(feature) {
     return feature;
 }
-export function createOptic(optic) {
-    return [optic(atom), optic(useAtom)];
+/**
+ * Creates a wrapper for the `atom` and `useAtom` functions.
+ * This function is simply a helper to create both a wrapped traditional
+ * factory (`atom`) and wrapped hook factory (`useAtom`) at the same time.
+ *
+ * **Example**
+ * ```
+ * const [ myOpticAtom, useMyOpticAtom ] = createOptic(generator => {
+ * 	// `generator` is both `atom` and `useAtom`
+ * 	return generator(0, (incoming) => 2 * incoming);
+ * });
+ * ```
+ */
+export function createOptic(factory) {
+    return [factory(atom), factory(useAtom)];
 }
 //# sourceMappingURL=Main.js.map
